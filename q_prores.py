@@ -25,9 +25,15 @@ class FileBrowseWidget(QtGui.QWidget):
         self.fileEdit = QtGui.QLineEdit("Select %s" % labelName)
         self.fileEdit.setReadOnly(True)
         self.fileEdit.setToolTip('Click to select a folder')
-        self.fileEdit.mousePressEvent = self.openFileDialog
+        #self.fileEdit.mousePressEvent = self.openFileDialog
         hLayout.addWidget(self.fileEdit)
         self.layout.addLayout(hLayout,1,0)
+
+    def addOpenFileDialogEvent(self):
+        self.fileEdit.mousePressEvent = self.openFileDialog
+
+    def addSaveFileDialogEvent(self):
+        self.fileEdit.mousePressEvent = self.saveFileDialog
 
     def openFileDialog(self, event):
         '''
@@ -36,8 +42,13 @@ class FileBrowseWidget(QtGui.QWidget):
         :return:
         '''
         dialog = QtGui.QFileDialog()
-        #dialog.setFileMode(QtGui.QFileDialog.Directory)
-        filename = dialog.getExistingDirectory(self, "Open Directory",
+        filename = dialog.getOpenFileName(self, "Select File",
+            QtCore.QDir.currentPath())
+        self.fileEdit.setText(str(filename))
+
+    def saveFileDialog(self, event):
+        dialog = QtGui.QFileDialog()
+        filename = dialog.getSaveFileName(self, "Save File",
             QtCore.QDir.currentPath())
         self.fileEdit.setText(str(filename))
 
@@ -66,8 +77,10 @@ class Q_ProresGui(QtGui.QMainWindow):
     def setupUI(self):
         viewerBox = QtGui.QGroupBox('File Options')
         vLayout = QtGui.QVBoxLayout()
-        self.inputWidget = FileBrowseWidget("Input Image Folder")
-        self.outputWidget = FileBrowseWidget("Output Movie Folder")
+        self.inputWidget = FileBrowseWidget("Input Image File")
+        self.inputWidget.addOpenFileDialogEvent()
+        self.outputWidget = FileBrowseWidget("Output Movie File")
+        self.outputWidget.addSaveFileDialogEvent()
         vLayout.addWidget(self.inputWidget)
         vLayout.addWidget(self.outputWidget)
         viewerBox.setLayout(vLayout)
@@ -88,13 +101,18 @@ class Q_ProresGui(QtGui.QMainWindow):
         vLayout.addWidget(createButton)
 
     def createMovie(self, event):
-        inputFolder = self.inputWidget.getFilePath()
-        outputFolder = self.outputWidget.getFilePath()
+        inputFile = self.inputWidget.getFilePath()
+        outputFile = str(self.outputWidget.getFilePath())
+
         imageExt = self.extBox.currentText()
         slugChoice = self.slugBox.checkState()
-        if 'Select' in inputFolder or 'Select' in outputFolder:
+        if 'Select' in inputFile or 'Select' in outputFile:
             QtGui.QMessageBox.warning(self, "Warning", "Please select input and output folder")
             return
+
+        inputFolder = os.path.dirname(str(inputFile))
+        if not outputFile.endswith('.mov'):
+            outputFile = '%s.mov' % outputFile
 
         shotName, firstFrame,lastFrame, date = self.getShotInfo(inputFolder, imageExt)
         if shotName == '':
@@ -102,7 +120,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             return
 
         if slugChoice == 2:
-            tmpDir = '%s\\tmp' % inputFolder
+            tmpDir = '%s\\tmp' % os.path.dirname(inputFolder)
             if not os.path.exists(tmpDir):
                 os.mkdir(tmpDir)
             slugResult = self.generateSlugImages(tmpDir, shotName, firstFrame,lastFrame, date)
@@ -113,14 +131,14 @@ class Q_ProresGui(QtGui.QMainWindow):
             if slugMovResult != 0:
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug movie!")
                 return
-            result = self.generateFileMovie(inputFolder, tmpDir, outputFolder, firstFrame, shotName, imageExt)
+            result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame, shotName, imageExt, lastFrame)
             if result != 0:
                 QtGui.QMessageBox.warning(self, "Error", "Error during final movie conversion!")
                 return
             QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
             shutil.rmtree(tmpDir)
         else:
-            result = self.generateFileMovieNoSlug(inputFolder, outputFolder, firstFrame, shotName, imageExt)
+            result = self.generateFileMovieNoSlug(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame)
             if result == 0:
                 QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
             else:
@@ -160,26 +178,48 @@ class Q_ProresGui(QtGui.QMainWindow):
         result = subprocess.call(args, shell=True)
         return result
 
-    def generateFileMovie(self, inputFolder, tmpDir, outputFolder, firstFrame, fileName, imageExt):
+    def generateFileMovie(self, inputFolder, tmpDir, outputFile, firstFrame, fileName, imageExt, lastFrame):
+        if imageExt == '.exr':
+            self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
+            fileName = 'exrTmp\\%s' % fileName
+
         finalMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s\\%s.%%0%sd%s" ' \
                       '-i "%s\\slug.mov" -filter_complex "overlay=1:1" ' \
-                      '-vcodec prores -profile:v 2 "%s\\%s.mov" ' % (firstFrame, inputFolder,
+                      '-vcodec prores -profile:v 2 "%s" ' % (firstFrame, inputFolder,
                                                                      fileName, len(str(firstFrame)),
                                                                      imageExt, tmpDir,
-                                                                     outputFolder, fileName)
+                                                                     outputFile)
         args = shlex.split(finalMovCmd)
         result = subprocess.call(args, shell=True)
+        if imageExt == '.exr':
+            shutil.rmtree('%s/exrTmp' % inputFolder)
         return result
 
-    def generateFileMovieNoSlug(self, inputFolder, outputFolder, firstFrame, fileName, imageExt):
+    def generateFileMovieNoSlug(self, inputFolder, outputFile, firstFrame, fileName, imageExt, lastFrame):
+        if imageExt == '.exr':
+            self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
+            fileName = 'exrTmp\\%s' % fileName
+
         finalMovCmd = 'ffmpeg.exe -y -start_number %s  -an -i "%s\\%s.%%0%sd%s" ' \
-                      '-vcodec prores -profile:v 2 "%s\\%s.mov" ' % (firstFrame, inputFolder,
+                      '-vcodec prores -profile:v 2 "%s" ' % (firstFrame, inputFolder,
                                                                      fileName, len(str(firstFrame)),
                                                                      imageExt,
-                                                                     outputFolder, fileName)
+                                                                     outputFile)
         args = shlex.split(finalMovCmd)
         result = subprocess.call(args, shell=True)
+        if imageExt == '.exr':
+            shutil.rmtree('%s/exrTmp' % inputFolder)
         return result
+
+    def convertExr(self, inputFolder, fileName, firstFrame, lastFrame):
+        if not os.path.exists('%s/exrTmp' % inputFolder):
+            os.mkdir('%s/exrTmp' % inputFolder)
+        slugCommand = 'convert.exe %s\\%s.exr "%s\\exrTmp\\%s.exr"' % (inputFolder,fileName,inputFolder,fileName)
+        args = shlex.split(slugCommand)
+        for i in range(firstFrame, lastFrame+1):
+            args[1] = '%s/%s.%s.exr' % (inputFolder, fileName, i)
+            args[2] = '%s/exrTmp/%s.%s.exr' % (inputFolder, fileName, i)
+            subprocess.call(args, shell=True)
 
 if __name__ == '__main__':
     app = QtGui.QApplication(sys.argv)
