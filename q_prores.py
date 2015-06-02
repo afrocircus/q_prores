@@ -74,8 +74,12 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Q_ProresGui')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.1')
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
+        self.setSizePolicy(sizePolicy)
+        self.setMinimumSize(310,200)
         window = QtGui.QWidget()
+
         from style import pyqt_style_rc
         f = QtCore.QFile('style/style.qss')
         f.open(QtCore.QFile.ReadOnly | QtCore.QFile.Text)
@@ -95,6 +99,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         self.outputWidget = FileBrowseWidget("Output Movie File")
         self.outputWidget.addSaveFileDialogEvent()
         self.inputWidget.fileEdit.textChanged.connect(self.outputWidget.setFilePath)
+        self.inputWidget.fileEdit.textChanged.connect(self.setSlugLabel)
         vLayout.addWidget(self.inputWidget)
         vLayout.addWidget(self.outputWidget)
         viewerBox.setLayout(vLayout)
@@ -110,15 +115,42 @@ class Q_ProresGui(QtGui.QMainWindow):
         hLayout.addWidget(QtGui.QLabel('Slug'))
         hLayout.addWidget(self.slugBox)
         vLayout.addLayout(hLayout)
+        self.slugBox.stateChanged.connect(self.showSlugOptions)
+
+        self.slugFrameBox = QtGui.QGroupBox('Slug Options')
+        self.centralLayout.addWidget(self.slugFrameBox)
+        hslugLayout = QtGui.QGridLayout()
+        self.slugFrameBox.setLayout(hslugLayout)
+        hslugLayout.addWidget(QtGui.QLabel('Slug Label'),0,0)
+        self.slugTextBox = QtGui.QLineEdit('Customize Slug Label')
+        hslugLayout.addWidget(self.slugTextBox,0,1)
+        self.slugFrameBox.setVisible(False)
+
         createButton = QtGui.QPushButton('Create Movie')
         createButton.clicked.connect(self.createMovie)
-        vLayout.addWidget(createButton)
+        self.centralLayout.addWidget(createButton)
+
         self.pLabel = QtGui.QLabel('')
         self.pBar = QtGui.QProgressBar()
         self.pBar.setVisible(False)
         self.pLabel.setVisible(False)
         self.centralLayout.addWidget(self.pLabel)
         self.centralLayout.addWidget(self.pBar)
+
+    def setSlugLabel(self, filename):
+        inputFolder = os.path.dirname(str(filename))
+        imageExt = str(filename).split('.')[-1]
+        shotName, firstFrame,lastFrame, date = self.getShotInfo(str(inputFolder), str(imageExt))
+        label = 'Quarks %s %s Frame#' % (date, shotName)
+        self.slugTextBox.setText(label)
+
+    def showSlugOptions(self, state):
+        if state == 2:
+            self.slugFrameBox.setVisible(True)
+            self.resize(self.sizeHint())
+        else:
+            self.slugFrameBox.setVisible(False)
+            self.resize(self.sizeHint())
 
     def createMovie(self, event):
         inputFile = self.inputWidget.getFilePath()
@@ -143,11 +175,18 @@ class Q_ProresGui(QtGui.QMainWindow):
 
         self.pBar.setVisible(True)
         self.pLabel.setVisible(True)
+        self.resize(310,300)
         self.pBar.setValue(0)
+        self.pBar.setMinimum(0)
+        self.pBar.setMaximum(100)
+        animation = QtCore.QPropertyAnimation(self.pBar, "value")
+        animation.setDuration(1000)
 
         if slugChoice == 2:
             self.pLabel.setText('Generating Slug...')
-            self.pBar.setValue(10)
+            animation.setStartValue(0)
+            animation.setEndValue(10)
+            animation.start()
             tmpDir = '%s\\tmp' % os.environ['TEMP']
             if not os.path.exists(tmpDir):
                 os.mkdir(tmpDir)
@@ -157,23 +196,31 @@ class Q_ProresGui(QtGui.QMainWindow):
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug images!")
                 return
             self.pLabel.setText('Slug Generated. Creating tmp movie...')
-            self.pBar.setValue(33)
+            animation.setStartValue(10)
+            animation.setEndValue(33)
+            animation.start()
             slugMovResult = self.generateSlugMovie(tmpDir, firstFrame)
             if slugMovResult != 0:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug movie!")
                 return
             self.pLabel.setText('Almost there. Generating final movie...')
-            self.pBar.setValue(66)
+            animation.setStartValue(33)
+            animation.setEndValue(66)
+            animation.start()
             result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame, shotName, imageExt, lastFrame)
             if result != 0:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error during final movie conversion!")
                 return
+            animation.setDuration(2000)
+            animation.setStartValue(66)
+            animation.setEndValue(100)
+            animation.stateChanged.connect(self.progressBarAnimationComplete)
+            animation.start()
             self.pBar.setValue(100)
-            self.pLabel.setText('Generation complete.')
-            self.setStyleSheet(self.stylesheet)
-            QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
+
+            #self.progressBarAnimationComplete()
             shutil.rmtree(tmpDir)
         else:
             self.pLabel.setText('Generating movie without slug...')
@@ -188,15 +235,22 @@ class Q_ProresGui(QtGui.QMainWindow):
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Conversion Error!")
 
+    def progressBarAnimationComplete(self):
+        self.pLabel.setText('Generation complete.')
+        self.setStyleSheet(self.stylesheet)
+        QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
+
     def generateSlugImages(self, tmpDir, shotName, firstFrame, lastFrame, date):
 
         slugCommand = 'convert.exe -size 450x40 -background black -fill white -pointsize 20 ' \
                       'label:"quarks %s ball frames:10" %s\\slug.jpg' % (date,tmpDir)
         args = shlex.split(slugCommand)
         result = []
+        label = str(self.slugTextBox.text())
+        label = label.replace('Frame#', '')
         for i in range(firstFrame, lastFrame+1):
             args[-1] = '%s\\slug.%s.jpg' % (tmpDir, i)
-            args[-2] = 'label:"quarks %s %s frames:%s"' % (date, shotName, i)
+            args[-2] = 'label:%s %s' % (label, i)
             result.append(subprocess.call(args, shell=True))
         for i in result:
             if i != 0:
