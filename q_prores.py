@@ -74,10 +74,10 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.1')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.2')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(310,200)
+        self.setMinimumSize(300,200)
         window = QtGui.QWidget()
 
         from style import pyqt_style_rc
@@ -94,7 +94,7 @@ class Q_ProresGui(QtGui.QMainWindow):
     def setupUI(self):
         viewerBox = QtGui.QGroupBox('File Options')
         vLayout = QtGui.QVBoxLayout()
-        self.inputWidget = FileBrowseWidget("Input Image File")
+        self.inputWidget = FileBrowseWidget("Input Image File  ")
         self.inputWidget.addOpenFileDialogEvent()
         self.outputWidget = FileBrowseWidget("Output Movie File")
         self.outputWidget.addSaveFileDialogEvent()
@@ -105,15 +105,15 @@ class Q_ProresGui(QtGui.QMainWindow):
         viewerBox.setLayout(vLayout)
         self.centralLayout.addWidget(viewerBox)
         hLayout = QtGui.QHBoxLayout()
-        self.extBox = QtGui.QComboBox()
-        self.extBox.addItems(['.jpg','.exr','.tif'])
+
         self.slugBox = QtGui.QCheckBox()
-        hLayout.addItem(QtGui.QSpacerItem(20,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
-        hLayout.addWidget(QtGui.QLabel('Image Extension'))
-        hLayout.addWidget(self.extBox)
-        hLayout.addItem(QtGui.QSpacerItem(20,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
+        hLayout.addItem(QtGui.QSpacerItem(10,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum))
         hLayout.addWidget(QtGui.QLabel('Slug'))
         hLayout.addWidget(self.slugBox)
+        hLayout.addItem(QtGui.QSpacerItem(75,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed))
+        hLayout.addWidget(QtGui.QLabel('Open Output Movie'))
+        self.movBox = QtGui.QCheckBox()
+        hLayout.addWidget(self.movBox)
         vLayout.addLayout(hLayout)
         self.slugBox.stateChanged.connect(self.showSlugOptions)
 
@@ -150,13 +150,12 @@ class Q_ProresGui(QtGui.QMainWindow):
             self.resize(self.sizeHint())
         else:
             self.slugFrameBox.setVisible(False)
-            self.resize(self.sizeHint())
+            self.resize(310,200)
 
     def createMovie(self, event):
         inputFile = self.inputWidget.getFilePath()
         outputFile = str(self.outputWidget.getFilePath())
 
-        imageExt = self.extBox.currentText()
         slugChoice = self.slugBox.checkState()
         if 'Select' in inputFile or 'Select' in outputFile:
             self.setStyleSheet(self.stylesheet)
@@ -164,6 +163,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             return
 
         inputFolder = os.path.dirname(str(inputFile))
+        imageExt = str(inputFile).split('.')[-1]
         if not outputFile.endswith('.mov'):
             outputFile = '%s.mov' % outputFile
 
@@ -175,16 +175,16 @@ class Q_ProresGui(QtGui.QMainWindow):
 
         self.pBar.setVisible(True)
         self.pLabel.setVisible(True)
-        self.resize(310,300)
+        self.resize(self.sizeHint())
         self.pBar.setValue(0)
         self.pBar.setMinimum(0)
         self.pBar.setMaximum(100)
         animation = QtCore.QPropertyAnimation(self.pBar, "value")
-        animation.setDuration(1000)
 
         if slugChoice == 2:
-            self.pLabel.setText('Generating Slug...')
+            self.pLabel.setText('Creating Slug...')
             animation.setStartValue(0)
+            animation.setDuration(1000)
             animation.setEndValue(10)
             animation.start()
             tmpDir = '%s\\tmp' % os.environ['TEMP']
@@ -195,7 +195,7 @@ class Q_ProresGui(QtGui.QMainWindow):
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug images!")
                 return
-            self.pLabel.setText('Slug Generated. Creating tmp movie...')
+            animation.setDuration(100)
             animation.setStartValue(10)
             animation.setEndValue(33)
             animation.start()
@@ -204,8 +204,9 @@ class Q_ProresGui(QtGui.QMainWindow):
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug movie!")
                 return
-            self.pLabel.setText('Almost there. Generating final movie...')
+            self.pLabel.setText('Encoding movie...')
             animation.setStartValue(33)
+            animation.setDuration(100)
             animation.setEndValue(66)
             animation.start()
             result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame, shotName, imageExt, lastFrame)
@@ -213,32 +214,41 @@ class Q_ProresGui(QtGui.QMainWindow):
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error during final movie conversion!")
                 return
-            animation.setDuration(2000)
             animation.setStartValue(66)
-            animation.setEndValue(100)
+            animation.setDuration(1000)
             animation.stateChanged.connect(self.progressBarAnimationComplete)
             animation.start()
-            self.pBar.setValue(100)
-
-            #self.progressBarAnimationComplete()
+            animation.setEndValue(100)
+            animation.setStartValue(100)
             shutil.rmtree(tmpDir)
         else:
-            self.pLabel.setText('Generating movie without slug...')
-            self.pBar.setValue(50)
+            self.pLabel.setText('Encoding Movie...')
             result = self.generateFileMovieNoSlug(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame)
             if result == 0:
-                self.pLabel.setText('Generation Complete')
+                self.pLabel.setText('Encoding Complete')
                 self.pBar.setValue(100)
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
+                if self.movBox.checkState() == 2:
+                    self.openOutputMovie(outputFile)
             else:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Conversion Error!")
 
     def progressBarAnimationComplete(self):
-        self.pLabel.setText('Generation complete.')
+        self.pLabel.setText('Encoding complete.')
         self.setStyleSheet(self.stylesheet)
         QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
+        if self.movBox.checkState() == 2:
+            self.openOutputMovie(str(self.outputWidget.getFilePath()))
+
+    def openOutputMovie(self, outputFile):
+        videoPlayerDir = 'C:\Program Files (x86)\QuickTime'
+        outputFile = outputFile.replace('/','\\')
+        if os.path.exists(videoPlayerDir):
+            os.chdir(videoPlayerDir)
+            args = ['QuickTimePlayer.exe', outputFile]
+            subprocess.call(args)
 
     def generateSlugImages(self, tmpDir, shotName, firstFrame, lastFrame, date):
 
@@ -280,12 +290,13 @@ class Q_ProresGui(QtGui.QMainWindow):
         if imageExt == '.exr':
             self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
             fileName = 'exrTmp\\%s' % fileName
+        inputFile = '%s.%s.%s' % (fileName, firstFrame, imageExt)
 
-        finalMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s\\%s.%%0%sd%s" ' \
-                      '-i "%s\\slug.mov" -filter_complex "overlay=1:1" ' \
+        finalMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s\\%s.%%0%sd.%s" ' \
+                      '-i "%s\\slug.mov" -metadata comment="Source Image:%s" -filter_complex "overlay=1:1" ' \
                       '-vcodec prores -profile:v 2 "%s" ' % (firstFrame, inputFolder,
                                                                      fileName, len(str(firstFrame)),
-                                                                     imageExt, tmpDir,
+                                                                     imageExt, tmpDir, inputFile,
                                                                      outputFile)
         args = shlex.split(finalMovCmd)
         result = subprocess.call(args, shell=True)
@@ -294,15 +305,18 @@ class Q_ProresGui(QtGui.QMainWindow):
         return result
 
     def generateFileMovieNoSlug(self, inputFolder, outputFile, firstFrame, fileName, imageExt, lastFrame):
-        if imageExt == '.exr':
+        if imageExt == 'exr':
             self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
-            fileName = 'exrTmp\\%s' % fileName
+            self.pBar.setValue(50)
+            filePath = '%s\\exrTmp\\%s' % (os.environ['TEMP'], fileName)
+        else:
+            filePath = '%s\\%s' % (inputFolder, fileName)
 
-        finalMovCmd = 'ffmpeg.exe -y -start_number %s  -an -i "%s\\%s.%%0%sd%s" ' \
-                      '-vcodec prores -profile:v 2 "%s" ' % (firstFrame, inputFolder,
-                                                                     fileName, len(str(firstFrame)),
-                                                                     imageExt,
-                                                                     outputFile)
+        finalMovCmd = 'ffmpeg.exe -y -start_number %s  -an -i "%s.%%0%sd.%s" ' \
+                      '-metadata comment="Source Image:%s.%s.%s" -vcodec prores ' \
+                      '-profile:v 2 "%s" ' % (firstFrame, filePath,
+                                              len(str(firstFrame)),
+                                              imageExt, fileName,firstFrame,imageExt, outputFile)
         args = shlex.split(finalMovCmd)
         result = subprocess.call(args, shell=True)
         if imageExt == '.exr':
@@ -310,13 +324,13 @@ class Q_ProresGui(QtGui.QMainWindow):
         return result
 
     def convertExr(self, inputFolder, fileName, firstFrame, lastFrame):
-        if not os.path.exists('%s/exrTmp' % inputFolder):
-            os.mkdir('%s/exrTmp' % inputFolder)
-        slugCommand = 'convert.exe %s\\%s.exr "%s\\exrTmp\\%s.exr"' % (inputFolder,fileName,inputFolder,fileName)
+        if not os.path.exists('%s/exrTmp' % os.environ['TEMP']):
+            os.mkdir('%s/exrTmp' % os.environ['TEMP'])
+        slugCommand = 'convert.exe %s\\%s.exr "%s\\exrTmp\\%s.exr"' % (inputFolder,fileName,os.environ['TEMP'],fileName)
         args = shlex.split(slugCommand)
         for i in range(firstFrame, lastFrame+1):
             args[1] = '%s/%s.%s.exr' % (inputFolder, fileName, i)
-            args[2] = '%s/exrTmp/%s.%s.exr' % (inputFolder, fileName, i)
+            args[2] = '%s/exrTmp/%s.%s.exr' % (os.environ['TEMP'], fileName, i)
             subprocess.call(args, shell=True)
 
 def main():
