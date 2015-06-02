@@ -24,7 +24,7 @@ class FileBrowseWidget(QtGui.QWidget):
         hLayout.addWidget(fileLabel)
         self.fileEdit = QtGui.QLineEdit("Select %s" % labelName)
         self.fileEdit.setReadOnly(True)
-        self.fileEdit.setToolTip('Click to select a folder')
+        self.fileEdit.setToolTip('Click to select a file')
         self.saveFilePath = QtCore.QDir.currentPath()
         hLayout.addWidget(self.fileEdit)
         self.layout.addLayout(hLayout,1,0)
@@ -74,7 +74,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.2')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.4')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(300,200)
@@ -183,10 +183,6 @@ class Q_ProresGui(QtGui.QMainWindow):
 
         if slugChoice == 2:
             self.pLabel.setText('Creating Slug...')
-            animation.setStartValue(0)
-            animation.setDuration(1000)
-            animation.setEndValue(10)
-            animation.start()
             tmpDir = '%s\\tmp' % os.environ['TEMP']
             if not os.path.exists(tmpDir):
                 os.mkdir(tmpDir)
@@ -195,31 +191,24 @@ class Q_ProresGui(QtGui.QMainWindow):
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug images!")
                 return
-            animation.setDuration(100)
-            animation.setStartValue(10)
-            animation.setEndValue(33)
-            animation.start()
             slugMovResult = self.generateSlugMovie(tmpDir, firstFrame)
             if slugMovResult != 0:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug movie!")
                 return
             self.pLabel.setText('Encoding movie...')
-            animation.setStartValue(33)
-            animation.setDuration(100)
-            animation.setEndValue(66)
-            animation.start()
             result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame, shotName, imageExt, lastFrame)
             if result != 0:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error during final movie conversion!")
                 return
-            animation.setStartValue(66)
-            animation.setDuration(1000)
-            animation.stateChanged.connect(self.progressBarAnimationComplete)
-            animation.start()
+            '''animation.setDuration(1000)
+            animation.setStartValue(self.pBar.value())
             animation.setEndValue(100)
-            animation.setStartValue(100)
+            animation.finished.connect(self.progressBarAnimationComplete)
+            animation.start()'''
+            self.pBar.setValue(100)
+            self.progressBarAnimationComplete()
             shutil.rmtree(tmpDir)
         else:
             self.pLabel.setText('Encoding Movie...')
@@ -258,10 +247,15 @@ class Q_ProresGui(QtGui.QMainWindow):
         result = []
         label = str(self.slugTextBox.text())
         label = label.replace('Frame#', '')
+        totalFrames = lastFrame - firstFrame
+        incrValue = 40.0/totalFrames
+        count = self.pBar.value()
         for i in range(firstFrame, lastFrame+1):
             args[-1] = '%s\\slug.%s.jpg' % (tmpDir, i)
             args[-2] = 'label:%s %s' % (label, i)
             result.append(subprocess.call(args, shell=True))
+            count = count + incrValue
+            self.pBar.setValue(count)
         for i in result:
             if i != 0:
                 return 1
@@ -287,15 +281,16 @@ class Q_ProresGui(QtGui.QMainWindow):
         return result
 
     def generateFileMovie(self, inputFolder, tmpDir, outputFile, firstFrame, fileName, imageExt, lastFrame):
-        if imageExt == '.exr':
+        if imageExt == 'exr':
             self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
-            fileName = 'exrTmp\\%s' % fileName
+            filePath = '%s\\exrTmp\\%s' % (os.environ['TEMP'], fileName)
+        else:
+            filePath = '%s\\%s' % (inputFolder, fileName)
         inputFile = '%s.%s.%s' % (fileName, firstFrame, imageExt)
 
-        finalMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s\\%s.%%0%sd.%s" ' \
+        finalMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s.%%0%sd.%s" ' \
                       '-i "%s\\slug.mov" -metadata comment="Source Image:%s" -filter_complex "overlay=1:1" ' \
-                      '-vcodec prores -profile:v 2 "%s" ' % (firstFrame, inputFolder,
-                                                                     fileName, len(str(firstFrame)),
+                      '-vcodec prores -profile:v 2 "%s" ' % (firstFrame, filePath, len(str(firstFrame)),
                                                                      imageExt, tmpDir, inputFile,
                                                                      outputFile)
         args = shlex.split(finalMovCmd)
@@ -307,7 +302,6 @@ class Q_ProresGui(QtGui.QMainWindow):
     def generateFileMovieNoSlug(self, inputFolder, outputFile, firstFrame, fileName, imageExt, lastFrame):
         if imageExt == 'exr':
             self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
-            self.pBar.setValue(50)
             filePath = '%s\\exrTmp\\%s' % (os.environ['TEMP'], fileName)
         else:
             filePath = '%s\\%s' % (inputFolder, fileName)
@@ -328,10 +322,15 @@ class Q_ProresGui(QtGui.QMainWindow):
             os.mkdir('%s/exrTmp' % os.environ['TEMP'])
         slugCommand = 'convert.exe %s\\%s.exr "%s\\exrTmp\\%s.exr"' % (inputFolder,fileName,os.environ['TEMP'],fileName)
         args = shlex.split(slugCommand)
+        totalFrames = lastFrame-firstFrame
+        incrValue = 50.0/totalFrames
+        count = self.pBar.value()
         for i in range(firstFrame, lastFrame+1):
             args[1] = '%s/%s.%s.exr' % (inputFolder, fileName, i)
             args[2] = '%s/exrTmp/%s.%s.exr' % (os.environ['TEMP'], fileName, i)
             subprocess.call(args, shell=True)
+            count = count + incrValue
+            self.pBar.setValue(count)
 
 def main():
     app = QtGui.QApplication(sys.argv)
