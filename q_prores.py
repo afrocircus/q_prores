@@ -76,10 +76,10 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.6')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.7')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(300,200)
+        self.setMinimumSize(320,200)
         window = QtGui.QWidget()
 
         from style import pyqt_style_rc
@@ -152,7 +152,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             self.resize(self.sizeHint())
         else:
             self.slugFrameBox.setVisible(False)
-            self.resize(310,200)
+            self.resize(320,200)
 
     def createMovie(self, event):
         inputFile = self.inputWidget.getFilePath()
@@ -181,7 +181,6 @@ class Q_ProresGui(QtGui.QMainWindow):
         self.pBar.setValue(0)
         self.pBar.setMinimum(0)
         self.pBar.setMaximum(100)
-        animation = QtCore.QPropertyAnimation(self.pBar, "value")
 
         if slugChoice == 2:
             self.pLabel.setText('Creating Slug...')
@@ -204,11 +203,6 @@ class Q_ProresGui(QtGui.QMainWindow):
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error during final movie conversion!")
                 return
-            '''animation.setDuration(1000)
-            animation.setStartValue(self.pBar.value())
-            animation.setEndValue(100)
-            animation.finished.connect(self.progressBarAnimationComplete)
-            animation.start()'''
             self.pBar.setValue(100)
             self.progressBarAnimationComplete()
             shutil.rmtree(tmpDir)
@@ -287,6 +281,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         date = datetime.now()
         dateStr = '%s/%s/%s' % (date.day, date.month, date.year)
         files = [file for file in os.listdir(inputFolder) if file.endswith(imageExt)]
+        files.sort()
         if files:
             shotName = files[0].split('.')[0]
             firstFrame = files[0].split('.')[1]
