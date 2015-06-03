@@ -4,6 +4,8 @@ import shlex
 import sys
 import os
 import shutil
+import glob
+import autoit
 from PyQt4 import QtGui, QtCore
 from datetime import datetime
 
@@ -74,7 +76,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.4')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.6')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(300,200)
@@ -232,12 +234,32 @@ class Q_ProresGui(QtGui.QMainWindow):
             self.openOutputMovie(str(self.outputWidget.getFilePath()))
 
     def openOutputMovie(self, outputFile):
-        videoPlayerDir = 'C:\Program Files (x86)\QuickTime'
+        videoPlayerDir = self.getVideoPlayer()
+        if videoPlayerDir == '':
+            return
+        self.pLabel.setText('Opening Movie %s' % outputFile.split('/')[-1])
+        title = outputFile.split('/')[-1].split('.')[0]
         outputFile = outputFile.replace('/','\\')
-        if os.path.exists(videoPlayerDir):
-            os.chdir(videoPlayerDir)
-            args = ['QuickTimePlayer.exe', outputFile]
-            subprocess.call(args)
+        autoit.run('%s %s' % (videoPlayerDir, outputFile))
+        if 'QuickTime' in videoPlayerDir:
+            autoit.win_wait(title, 100)
+            import time
+            time.sleep(3)
+            autoit.control_send(title, '', '{CTRLDOWN}0{CTRLUP}')
+
+    def getVideoPlayer(self):
+        videoPlayerDir = ''
+        videoPlayerDirList = glob.glob('C:\\Program*\\QuickTime*')
+        if videoPlayerDirList:
+            videoPlayerDir = '%s\\QuickTimePlayer.exe' % videoPlayerDirList[0]
+        else:
+            videoPlayerDirList = glob.glob('C:\Program*\\VideoLan*')
+            if videoPlayerDirList:
+                videoPlayerDir = '%s\\VLC\\vlc.exe' % videoPlayerDirList[0]
+            else:
+                self.setStyleSheet(self.stylesheet)
+                QtGui.QMessageBox.warning(self, "Video Player Error", "QuickTime or VLC not installed.")
+        return videoPlayerDir
 
     def generateSlugImages(self, tmpDir, shotName, firstFrame, lastFrame, date):
 
