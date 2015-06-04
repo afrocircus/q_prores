@@ -49,6 +49,11 @@ class FileBrowseWidget(QtGui.QWidget):
         self.fileEdit.setText(str(filename))
 
     def saveFileDialog(self, event):
+        '''
+        Opens a file browser when the text box is clicked.
+        :param event: Event triggered when the text box is clicked.
+        :return:
+        '''
         dialog = QtGui.QFileDialog()
         filename = dialog.getSaveFileName(self, "Save File",
             self.saveFilePath, options= QtGui.QFileDialog.DontUseNativeDialog)
@@ -61,6 +66,9 @@ class FileBrowseWidget(QtGui.QWidget):
         return self.fileEdit.text()
 
     def setFilePath(self, filename):
+        '''
+        :param filename: The text box is set with this filename
+        '''
         filename = str(filename)
         newFilename = filename.split('/')[-1].split('.')[0]
         newFilePath = '%s/%s.mov' % (os.path.dirname(filename), newFilename)
@@ -76,31 +84,35 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.7')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.9')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(320,200)
         window = QtGui.QWidget()
 
-        from style import pyqt_style_rc
+        from style import pyqt_style_rc         # Import the Qt Style Sheet
         f = QtCore.QFile('style/style.qss')
         f.open(QtCore.QFile.ReadOnly | QtCore.QFile.Text)
         ts = QtCore.QTextStream(f)
         self.stylesheet = ts.readAll()
         window.setStyleSheet(self.stylesheet)
+
         self.centralLayout = QtGui.QVBoxLayout()
         window.setLayout(self.centralLayout)
         self.setCentralWidget(window)
         self.setupUI()
 
     def setupUI(self):
+        # Setup the input and output file widgets
         viewerBox = QtGui.QGroupBox('File Options')
         vLayout = QtGui.QVBoxLayout()
         self.inputWidget = FileBrowseWidget("Input Image File  ")
         self.inputWidget.addOpenFileDialogEvent()
         self.outputWidget = FileBrowseWidget("Output Movie File")
         self.outputWidget.addSaveFileDialogEvent()
+        # Set trigger to change output path when input file is selected.
         self.inputWidget.fileEdit.textChanged.connect(self.outputWidget.setFilePath)
+        # Set trigger to change label when input file is selected.
         self.inputWidget.fileEdit.textChanged.connect(self.setSlugLabel)
         vLayout.addWidget(self.inputWidget)
         vLayout.addWidget(self.outputWidget)
@@ -108,17 +120,21 @@ class Q_ProresGui(QtGui.QMainWindow):
         self.centralLayout.addWidget(viewerBox)
         hLayout = QtGui.QHBoxLayout()
 
+        # Setup the slug checkbox
         self.slugBox = QtGui.QCheckBox()
         hLayout.addItem(QtGui.QSpacerItem(10,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum))
         hLayout.addWidget(QtGui.QLabel('Slug'))
         hLayout.addWidget(self.slugBox)
         hLayout.addItem(QtGui.QSpacerItem(75,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed))
         hLayout.addWidget(QtGui.QLabel('Open Output Movie'))
+
+        # Setup the movie checkbox
         self.movBox = QtGui.QCheckBox()
         hLayout.addWidget(self.movBox)
         vLayout.addLayout(hLayout)
         self.slugBox.stateChanged.connect(self.showSlugOptions)
 
+        # Setup the slug options and set visibility to False.
         self.slugFrameBox = QtGui.QGroupBox('Slug Options')
         self.centralLayout.addWidget(self.slugFrameBox)
         hslugLayout = QtGui.QGridLayout()
@@ -132,6 +148,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         createButton.clicked.connect(self.createMovie)
         self.centralLayout.addWidget(createButton)
 
+        # Setup the progress bar and set visible to False
         self.pLabel = QtGui.QLabel('')
         self.pBar = QtGui.QProgressBar()
         self.pBar.setVisible(False)
@@ -140,6 +157,10 @@ class Q_ProresGui(QtGui.QMainWindow):
         self.centralLayout.addWidget(self.pBar)
 
     def setSlugLabel(self, filename):
+        '''
+        Sets the slug label based on input file name.
+        :param filename: Name of the input file
+        '''
         inputFolder = os.path.dirname(str(filename))
         imageExt = str(filename).split('.')[-1]
         shotName, firstFrame,lastFrame, date = self.getShotInfo(str(inputFolder), str(imageExt))
@@ -147,6 +168,11 @@ class Q_ProresGui(QtGui.QMainWindow):
         self.slugTextBox.setText(label)
 
     def showSlugOptions(self, state):
+        '''
+        Sets visibilty of slug options based on state of slug check box.
+        Resizes the window appropriately.
+        :param state: State of the slug check box.
+        '''
         if state == 2:
             self.slugFrameBox.setVisible(True)
             self.resize(self.sizeHint())
@@ -155,10 +181,15 @@ class Q_ProresGui(QtGui.QMainWindow):
             self.resize(320,200)
 
     def createMovie(self, event):
+        '''
+        :param event: This event is triggered when the "Create Movie" button is pressed.
+        :return:
+        '''
         inputFile = self.inputWidget.getFilePath()
         outputFile = str(self.outputWidget.getFilePath())
 
         slugChoice = self.slugBox.checkState()
+        # Check if file names are valid.
         if 'Select' in inputFile or 'Select' in outputFile:
             self.setStyleSheet(self.stylesheet)
             QtGui.QMessageBox.warning(self, "Warning", "Please select input and output folder")
@@ -170,9 +201,10 @@ class Q_ProresGui(QtGui.QMainWindow):
             outputFile = '%s.mov' % outputFile
 
         shotName, firstFrame,lastFrame, date = self.getShotInfo(inputFolder, imageExt)
-        if shotName == '':
+        # Check if frame numbers are valid
+        if firstFrame == 0 or lastFrame == 0:
             self.setStyleSheet(self.stylesheet)
-            QtGui.QMessageBox.warning(self, "Warning", "No files found with %s extension" % imageExt)
+            QtGui.QMessageBox.warning(self, "Error", "Frame numbers are incorrect! Numbers must start with 1. Eg. 1001")
             return
 
         self.pBar.setVisible(True)
@@ -228,6 +260,10 @@ class Q_ProresGui(QtGui.QMainWindow):
             self.openOutputMovie(str(self.outputWidget.getFilePath()))
 
     def openOutputMovie(self, outputFile):
+        '''
+        Opens the output movie file with the installed player using autoit
+        :param outputFile: Output movie file
+        '''
         videoPlayerDir = self.getVideoPlayer()
         if videoPlayerDir == '':
             return
@@ -238,10 +274,16 @@ class Q_ProresGui(QtGui.QMainWindow):
         if 'QuickTime' in videoPlayerDir:
             autoit.win_wait(title, 100)
             import time
+            # This is a hack. We wait 3 sec for the movie to load completely before sending the next signal.
+            # Otherwise the signal is not registered.
             time.sleep(3)
             autoit.control_send(title, '', '{CTRLDOWN}0{CTRLUP}')
 
     def getVideoPlayer(self):
+        '''
+        Checks if QuickTimePlayer exists. If not checks for VLC player.
+        :return: videoPlayerDir: Path of the video player
+        '''
         videoPlayerDir = ''
         videoPlayerDirList = glob.glob('C:\\Program*\\QuickTime*')
         if videoPlayerDirList:
@@ -256,6 +298,15 @@ class Q_ProresGui(QtGui.QMainWindow):
         return videoPlayerDir
 
     def generateSlugImages(self, tmpDir, shotName, firstFrame, lastFrame, date):
+        '''
+        Slug Images are generated and stored in tmpDir
+        :param tmpDir: Temporary Directory in the Users local temp
+        :param shotName: Name of the shot  type:str
+        :param firstFrame: First frame type:int
+        :param lastFrame: Last frame type: int
+        :param date: Date mm/dd/yyyy type:str
+        :return:
+        '''
 
         slugCommand = 'convert.exe -size 450x40 -background black -fill white -pointsize 20 ' \
                       'label:"quarks %s ball frames:10" %s\\slug.jpg' % (date,tmpDir)
@@ -268,7 +319,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         count = self.pBar.value()
         for i in range(firstFrame, lastFrame+1):
             args[-1] = '%s\\slug.%s.jpg' % (tmpDir, i)
-            args[-2] = 'label:%s %s' % (label, i)
+            args[-2] = 'label:%s %s' % (label, str(i).replace('1','0',1))
             result.append(subprocess.call(args, shell=True))
             count = count + incrValue
             self.pBar.setValue(count)
@@ -278,6 +329,12 @@ class Q_ProresGui(QtGui.QMainWindow):
         return 0
 
     def getShotInfo(self, inputFolder, imageExt):
+        '''
+        Returns shot information
+        :param inputFolder: Input Folder
+        :param imageExt: Image extension
+        :return: shotName, first frame, last frame and date
+        '''
         date = datetime.now()
         dateStr = '%s/%s/%s' % (date.day, date.month, date.year)
         files = [file for file in os.listdir(inputFolder) if file.endswith(imageExt)]
@@ -291,6 +348,12 @@ class Q_ProresGui(QtGui.QMainWindow):
             return '',0,0,dateStr
 
     def generateSlugMovie(self, tmpDir, firstFrame):
+        '''
+        Generates a movie of the slug images. Stores it in the same temp folder
+        :param tmpDir: Temp Folder in the users local temp.
+        :param firstFrame: first frame
+        :return:
+        '''
         slugMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s\\slug.%%0%sd.jpg" ' \
                      '-vcodec prores -profile:v 2 "%s\\slug.mov"' % (firstFrame, tmpDir, len(str(firstFrame)), tmpDir)
         args = shlex.split(slugMovCmd)
@@ -298,7 +361,11 @@ class Q_ProresGui(QtGui.QMainWindow):
         return result
 
     def generateFileMovie(self, inputFolder, tmpDir, outputFile, firstFrame, fileName, imageExt, lastFrame):
+        '''
+        Composites the slug movie with the input images to generate the final movie.
+        '''
         if imageExt == 'exr':
+            # Convert exr to exr using imagemagik to get the exr format correct.
             self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
             filePath = '%s\\exrTmp\\%s' % (os.environ['TEMP'], fileName)
         else:
@@ -317,7 +384,11 @@ class Q_ProresGui(QtGui.QMainWindow):
         return result
 
     def generateFileMovieNoSlug(self, inputFolder, outputFile, firstFrame, fileName, imageExt, lastFrame):
+        '''
+        Generate the movie without the slug, only from the input image sequence.
+        '''
         if imageExt == 'exr':
+            # Convert exr to correct format using imagemagik
             self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
             filePath = '%s\\exrTmp\\%s' % (os.environ['TEMP'], fileName)
         else:
@@ -335,6 +406,10 @@ class Q_ProresGui(QtGui.QMainWindow):
         return result
 
     def convertExr(self, inputFolder, fileName, firstFrame, lastFrame):
+        '''
+        Generate new exr from input exr images using ImageMagik.
+        This was required as the compression type of the input exr images was not supported.
+        '''
         if not os.path.exists('%s/exrTmp' % os.environ['TEMP']):
             os.mkdir('%s/exrTmp' % os.environ['TEMP'])
         slugCommand = 'convert.exe %s\\%s.exr "%s\\exrTmp\\%s.exr"' % (inputFolder,fileName,os.environ['TEMP'],fileName)
