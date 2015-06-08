@@ -6,74 +6,10 @@ import os
 import shutil
 import glob
 import autoit
+from widgets import FileBrowseWidget
+from widgets import BatchRunWidget
 from PyQt4 import QtGui, QtCore
 from datetime import datetime
-
-class FileBrowseWidget(QtGui.QWidget):
-    '''
-    Creates a widget that contains a label and a file browser
-    '''
-    def __init__(self, labelName):
-        '''
-        Creates the elements of the widget.
-        :param labelName: Name of the label
-        '''
-        super(FileBrowseWidget, self).__init__()
-        self.layout = QtGui.QGridLayout()
-        self.setLayout(self.layout)
-        hLayout = QtGui.QHBoxLayout()
-        fileLabel = QtGui.QLabel(labelName)
-        hLayout.addWidget(fileLabel)
-        self.fileEdit = QtGui.QLineEdit("Select %s" % labelName)
-        self.fileEdit.setReadOnly(True)
-        self.fileEdit.setToolTip('Click to select a file')
-        self.saveFilePath = QtCore.QDir.currentPath()
-        hLayout.addWidget(self.fileEdit)
-        self.layout.addLayout(hLayout,1,0)
-
-    def addOpenFileDialogEvent(self):
-        self.fileEdit.mousePressEvent = self.openFileDialog
-
-    def addSaveFileDialogEvent(self):
-        self.fileEdit.mousePressEvent = self.saveFileDialog
-
-    def openFileDialog(self, event):
-        '''
-        Opens a file browser when the text box is clicked.
-        :param event: Event triggered when the text box is clicked.
-        :return:
-        '''
-        dialog = QtGui.QFileDialog()
-        filename = dialog.getOpenFileName(self, "Select File",
-            QtCore.QDir.currentPath(), options= QtGui.QFileDialog.DontUseNativeDialog)
-        self.fileEdit.setText(str(filename))
-
-    def saveFileDialog(self, event):
-        '''
-        Opens a file browser when the text box is clicked.
-        :param event: Event triggered when the text box is clicked.
-        :return:
-        '''
-        dialog = QtGui.QFileDialog()
-        filename = dialog.getSaveFileName(self, "Save File",
-            self.saveFilePath, options= QtGui.QFileDialog.DontUseNativeDialog)
-        self.fileEdit.setText(str(filename))
-
-    def getFilePath(self):
-        '''
-        :return: The file selected by the user.
-        '''
-        return self.fileEdit.text()
-
-    def setFilePath(self, filename):
-        '''
-        :param filename: The text box is set with this filename
-        '''
-        filename = str(filename)
-        newFilename = filename.split('/')[-1].split('.')[0]
-        newFilePath = '%s/%s.mov' % (os.path.dirname(filename), newFilename)
-        self.fileEdit.setText(newFilePath)
-        self.saveFilePath = newFilePath
 
 class Q_ProresGui(QtGui.QMainWindow):
     '''
@@ -97,7 +33,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         self.stylesheet = ts.readAll()
         window.setStyleSheet(self.stylesheet)
 
-        self.centralLayout = QtGui.QVBoxLayout()
+        self.centralLayout = QtGui.QGridLayout()
         window.setLayout(self.centralLayout)
         self.setCentralWidget(window)
         self.setupUI()
@@ -125,14 +61,22 @@ class Q_ProresGui(QtGui.QMainWindow):
         hLayout.addItem(QtGui.QSpacerItem(10,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum))
         hLayout.addWidget(QtGui.QLabel('Slug'))
         hLayout.addWidget(self.slugBox)
-        hLayout.addItem(QtGui.QSpacerItem(75,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed))
-        hLayout.addWidget(QtGui.QLabel('Open Output Movie'))
+        self.slugBox.stateChanged.connect(self.showSlugOptions)
+        hLayout.addItem(QtGui.QSpacerItem(10,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed))
 
         # Setup the movie checkbox
+        hLayout.addWidget(QtGui.QLabel('Open Output Movie'))
         self.movBox = QtGui.QCheckBox()
         hLayout.addWidget(self.movBox)
+        hLayout.addItem(QtGui.QSpacerItem(20,10, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Fixed))
+
+        # Setup batch options
+        hLayout.addWidget(QtGui.QLabel("Batch"))
+        self.batchBox = QtGui.QCheckBox()
+        hLayout.addWidget(self.batchBox)
+        self.batchBox.stateChanged.connect(self.showBatchOptions)
         vLayout.addLayout(hLayout)
-        self.slugBox.stateChanged.connect(self.showSlugOptions)
+        vLayout.addItem(QtGui.QSpacerItem(10,1, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
 
         # Setup the slug options and set visibility to False.
         self.slugFrameBox = QtGui.QGroupBox('Slug Options')
@@ -143,6 +87,11 @@ class Q_ProresGui(QtGui.QMainWindow):
         self.slugTextBox = QtGui.QLineEdit('Customize Slug Label')
         hslugLayout.addWidget(self.slugTextBox,0,1)
         self.slugFrameBox.setVisible(False)
+
+        # Setup Batch Widget
+        self.batchWidget = BatchRunWidget()
+        self.centralLayout.addWidget(self.batchWidget, 0,1)
+        self.batchWidget.setVisible(False)
 
         createButton = QtGui.QPushButton('Create Movie')
         createButton.clicked.connect(self.createMovie)
@@ -178,7 +127,19 @@ class Q_ProresGui(QtGui.QMainWindow):
             self.resize(self.sizeHint())
         else:
             self.slugFrameBox.setVisible(False)
-            self.resize(320,200)
+            self.resize(self.sizeHint())
+
+    def showBatchOptions(self, state):
+        '''
+        Sets visibilty of the batch options based on state of checkbox
+        :param state: State of batch checkbox
+        '''
+        if state == 2:
+            self.batchWidget.setVisible(True)
+            self.resize(self.sizeHint())
+        else:
+            self.batchWidget.setVisible(False)
+            self.resize(self.sizeHint())
 
     def createMovie(self, event):
         '''
