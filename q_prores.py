@@ -10,6 +10,21 @@ from widgets import FileBrowseWidget
 from widgets import BatchRunWidget
 from PyQt4 import QtGui, QtCore
 from datetime import datetime
+from multiprocessing import Pool
+
+class GenericThread(QtCore.QThread):
+    def __init__(self, function, *args, **kwargs):
+        QtCore.QThread.__init__(self)
+        self.function = function
+        self.args = args
+        self.kwargs = kwargs
+
+    def __del__(self):
+        self.wait()
+
+    def run(self):
+        self.function(*self.args,**self.kwargs)
+        return
 
 class Q_ProresGui(QtGui.QMainWindow):
     '''
@@ -20,7 +35,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v1.9')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.0')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(320,200)
@@ -80,7 +95,7 @@ class Q_ProresGui(QtGui.QMainWindow):
 
         # Setup the slug options and set visibility to False.
         self.slugFrameBox = QtGui.QGroupBox('Slug Options')
-        self.centralLayout.addWidget(self.slugFrameBox)
+        self.centralLayout.addWidget(self.slugFrameBox,1,0)
         hslugLayout = QtGui.QGridLayout()
         self.slugFrameBox.setLayout(hslugLayout)
         hslugLayout.addWidget(QtGui.QLabel('Slug Label'),0,0)
@@ -95,15 +110,15 @@ class Q_ProresGui(QtGui.QMainWindow):
 
         createButton = QtGui.QPushButton('Create Movie')
         createButton.clicked.connect(self.createMovie)
-        self.centralLayout.addWidget(createButton)
+        self.centralLayout.addWidget(createButton,2,0)
 
         # Setup the progress bar and set visible to False
         self.pLabel = QtGui.QLabel('')
         self.pBar = QtGui.QProgressBar()
         self.pBar.setVisible(False)
         self.pLabel.setVisible(False)
-        self.centralLayout.addWidget(self.pLabel)
-        self.centralLayout.addWidget(self.pBar)
+        self.centralLayout.addWidget(self.pLabel,3,0)
+        self.centralLayout.addWidget(self.pBar,4,0)
 
     def setSlugLabel(self, filename):
         '''
@@ -146,6 +161,102 @@ class Q_ProresGui(QtGui.QMainWindow):
         :param event: This event is triggered when the "Create Movie" button is pressed.
         :return:
         '''
+        self.pBar.setVisible(True)
+        self.pLabel.setVisible(True)
+        self.resize(self.sizeHint())
+        self.pBar.setValue(0)
+        self.pBar.setMinimum(0)
+        self.pBar.setMaximum(100)
+
+        if self.batchBox.checkState() == 2:
+            self.createMovieBatch()
+        else:
+            self.createMovieNoBatch()
+
+    def progressBarAnimationComplete(self):
+        self.pLabel.setText('Encoding complete.')
+        self.setStyleSheet(self.stylesheet)
+        QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
+        if self.movBox.checkState() == 2:
+            self.openOutputMovie(str(self.outputWidget.getFilePath()))
+
+    def createMovieBatch(self):
+        inFolder, outputFolder = self.batchWidget.getFilePath()
+        slugChoice = self.slugBox.checkState()
+        if 'Select' in inFolder or inFolder is '' \
+            or 'Select' in outputFolder or outputFolder is '':
+            self.setStyleSheet(self.stylesheet)
+            QtGui.QMessageBox.warning(self, "Warning", "Please select input and output folder")
+            return
+        dirList = self.batchWidget.getAllCheckedItems()
+        self.resultDict = {}
+        total = len(dirList)
+        count = 0
+        for dir in dirList:
+            count = count + 1
+            if dir == './':
+                inputFolder = inFolder
+            else:
+                inputFolder = '%s/%s' % (inFolder, dir)
+            imageExt = self.batchWidget.getImageExt(inputFolder)
+            shotName, firstFrame,lastFrame, date = self.getShotInfo(inputFolder, imageExt)
+            if firstFrame == 0 or firstFrame == 1:
+                self.resultDict[shotName, imageExt] = 1
+                continue
+            else:
+                self.resultDict[shotName, imageExt] = 0
+            outputFile = '%s/%s.mov' % (outputFolder, shotName)
+            self.pLabel.setText('Making movie %s.mov' % shotName )
+            QtGui.QApplication.processEvents()
+            if slugChoice == 2:
+                self.batchSlugMovie(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame, date)
+            else:
+                self.batchNoSlugMovie(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame)
+            percentage = count * 100 / total
+            self.pBar.setValue(percentage)
+            QtGui.QApplication.processEvents()
+        self.processResult()
+
+    def processResult(self):
+        successList = []
+        failList = []
+        for key in self.resultDict.keys():
+            shot, ext = key
+            if self.resultDict[key] == 0:
+                successList.append(shot)
+            else:
+                failList.append(shot)
+        if len(failList) == 0:
+            self.setStyleSheet(self.stylesheet)
+            QtGui.QMessageBox.about(self, "Complete", "Conversion Complete!")
+        else:
+            self.setStyleSheet(self.stylesheet)
+            listStr = ''
+            for file in failList:
+                listStr = '%s %s \n' % (listStr, file)
+            QtGui.QMessageBox.warning(self, "Error", "Conversion complete for all shots except: %s" % listStr)
+
+    def batchSlugMovie(self, inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame, date):
+        tmpDir = '%s\\tmp_%s' % (os.environ['TEMP'], shotName)
+        if not os.path.exists(tmpDir):
+            os.mkdir(tmpDir)
+        slugResult = self.generateSlugImages(tmpDir, shotName, firstFrame,lastFrame, date)
+        if slugResult == 0:
+            slugMovResult = self.generateSlugMovie(tmpDir, firstFrame)
+            if slugMovResult == 0:
+                result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame, shotName, imageExt, lastFrame)
+                self.resultDict[shotName, imageExt] = result
+            else:
+                self.resultDict[shotName, imageExt] = slugMovResult
+        else:
+            self.resultDict[shotName, imageExt] = slugResult
+
+    def batchNoSlugMovie(self, inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame):
+        self.pLabel.setText('Making movie %s.mov' % shotName)
+        result = self.generateFileMovieNoSlug(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame)
+        self.resultDict[shotName, imageExt] = result
+
+    def createMovieNoBatch(self):
         inputFile = self.inputWidget.getFilePath()
         outputFile = str(self.outputWidget.getFilePath())
 
@@ -167,13 +278,6 @@ class Q_ProresGui(QtGui.QMainWindow):
             self.setStyleSheet(self.stylesheet)
             QtGui.QMessageBox.warning(self, "Error", "Frame numbers are incorrect! Numbers must start with 1. Eg. 1001")
             return
-
-        self.pBar.setVisible(True)
-        self.pLabel.setVisible(True)
-        self.resize(self.sizeHint())
-        self.pBar.setValue(0)
-        self.pBar.setMinimum(0)
-        self.pBar.setMaximum(100)
 
         if slugChoice == 2:
             self.pLabel.setText('Creating Slug...')
@@ -212,13 +316,6 @@ class Q_ProresGui(QtGui.QMainWindow):
             else:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Conversion Error!")
-
-    def progressBarAnimationComplete(self):
-        self.pLabel.setText('Encoding complete.')
-        self.setStyleSheet(self.stylesheet)
-        QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
-        if self.movBox.checkState() == 2:
-            self.openOutputMovie(str(self.outputWidget.getFilePath()))
 
     def openOutputMovie(self, outputFile):
         '''
@@ -275,6 +372,8 @@ class Q_ProresGui(QtGui.QMainWindow):
         result = []
         label = str(self.slugTextBox.text())
         label = label.replace('Frame#', '')
+        if self.batchBox.checkState() == 2:
+            label = 'Quarks %s %s' % (date, shotName)
         totalFrames = lastFrame - firstFrame
         incrValue = 40.0/totalFrames
         count = self.pBar.value()
@@ -283,7 +382,8 @@ class Q_ProresGui(QtGui.QMainWindow):
             args[-2] = 'label:%s %s' % (label, str(i).replace('1','0',1))
             result.append(subprocess.call(args, shell=True))
             count = count + incrValue
-            self.pBar.setValue(count)
+            if self.batchBox.checkState() != 2:
+                self.pBar.setValue(count)
         for i in result:
             if i != 0:
                 return 1
@@ -383,7 +483,8 @@ class Q_ProresGui(QtGui.QMainWindow):
             args[2] = '%s/exrTmp/%s.%s.exr' % (os.environ['TEMP'], fileName, i)
             subprocess.call(args, shell=True)
             count = count + incrValue
-            self.pBar.setValue(count)
+            if self.batchBox.checkState() != 2:
+                self.pBar.setValue(count)
 
 def main():
     app = QtGui.QApplication(sys.argv)

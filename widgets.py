@@ -118,12 +118,13 @@ class BatchRunWidget(QtGui.QWidget):
         self.opFileEdit.setText(str(filename))
         self.listWidget.clear()
         self.fileDict = {}
-        self.getAllImageSequences(str(filename))
-        for key in self.fileDict.keys():
-            folder = key.replace('%s' % str(filename), '')
-            if folder[1:] == '':
-                folder = '/./'
-            self.addCheckBoxes(folder[1:])
+        if str(filename) is not '':
+            self.getAllImageSequences(str(filename))
+            for key in self.fileDict.keys():
+                folder = key.replace('%s' % str(filename), '')
+                if folder[1:] == '':
+                    folder = '/./'
+                self.addCheckBoxes(folder[1:])
 
     def saveFileDialog(self, event):
         '''
@@ -142,9 +143,9 @@ class BatchRunWidget(QtGui.QWidget):
 
     def getFilePath(self):
         '''
-        :return: The file selected by the user.
+        :return: The input/output folders selected by the user.
         '''
-        return self.fileEdit.text()
+        return str(self.fileEdit.text()), str(self.opFileEdit.text())
 
     def addCheckBoxes(self, dirName):
         '''
@@ -189,4 +190,9 @@ class BatchRunWidget(QtGui.QWidget):
         for index in xrange(self.listWidget.count()):
             checkBox = self.listWidget.itemWidget(self.listWidget.item(index))
             if checkBox.checkState() == 2:
-                dirList.append(checkBox.text())
+                dirList.append(str(checkBox.text()))
+        return dirList
+
+    def getImageExt(self, dir):
+        fileList = self.fileDict[dir]
+        return fileList[0].split('.')[-1]
