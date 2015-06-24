@@ -6,11 +6,11 @@ import os
 import shutil
 import glob
 import autoit
+import re
 from widgets import FileBrowseWidget
 from widgets import BatchRunWidget
 from PyQt4 import QtGui, QtCore
 from datetime import datetime
-from multiprocessing import Pool
 
 class GenericThread(QtCore.QThread):
     def __init__(self, function, *args, **kwargs):
@@ -35,7 +35,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.2')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.3')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(320,200)
@@ -463,7 +463,13 @@ class Q_ProresGui(QtGui.QMainWindow):
                                                                      imageExt, tmpDir, inputFile,
                                                                      outputFile)
         args = shlex.split(finalMovCmd)
-        result = subprocess.call(args, shell=True)
+        #result = subprocess.call(args, shell=True)
+        try:
+            p = subprocess.Popen(finalMovCmd, shell=True, bufsize=64, stderr=subprocess.PIPE)
+            self.updateProgressBar(p)
+            result = 0
+        except:
+            result = 1
         if imageExt == '.exr':
             shutil.rmtree('%s/exrTmp' % inputFolder)
         return result
@@ -485,7 +491,13 @@ class Q_ProresGui(QtGui.QMainWindow):
                                               len(str(firstFrame)),
                                               imageExt, fileName,firstFrame,imageExt, outputFile)
         args = shlex.split(finalMovCmd)
-        result = subprocess.call(args, shell=True)
+        #result = subprocess.call(args, shell=True)
+        try:
+            p = subprocess.Popen(finalMovCmd, shell=True, bufsize=64, stderr=subprocess.PIPE)
+            self.updateProgressBar(p)
+            result = 0
+        except:
+            result = 1
         if imageExt == '.exr':
             shutil.rmtree('%s/exrTmp' % inputFolder)
         return result
@@ -509,6 +521,26 @@ class Q_ProresGui(QtGui.QMainWindow):
             count = count + incrValue
             if self.batchBox.checkState() != 2:
                 self.pBar.setValue(count)
+
+    def updateProgressBar(self, process):
+        while True:
+            chatter = process.stderr.read(1024)
+            durationRes = re.search(r"Duration:\s(?P<duration>\S+)", chatter)
+            if durationRes:
+                durationList = durationRes.groupdict()['duration'][:-1].split(':')
+                duration = int(durationList[0])*3600 + int(durationList[1])*60 + float(durationList[2])
+            result = re.search(r'\stime=(?P<time>\S+)', chatter)
+            if result:
+                elapsed_time = result.groupdict()['time'].split(':')
+                secs = int(elapsed_time[0])*3600 + int(elapsed_time[1])*60 + float(elapsed_time[2])
+                curValue = self.pBar.value()
+                outOf = 100-curValue
+                progress = secs/duration * outOf
+                QtGui.QApplication.processEvents()
+                self.pBar.setValue(int(progress+curValue))
+                print int(progress+curValue)
+            if not chatter:
+                break
 
 def main():
     app = QtGui.QApplication(sys.argv)
