@@ -35,7 +35,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.1')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.2')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(320,200)
@@ -127,10 +127,27 @@ class Q_ProresGui(QtGui.QMainWindow):
         '''
         inputFolder = os.path.dirname(str(filename))
         imageExt = str(filename).split('.')[-1]
-        if imageExt != 'avi':
+        if imageExt == 'avi':
+            inputFolder = '%s/imageSeq' % os.environ['TEMP']
+            result = self.extractJpegToTmp(filename, inputFolder)
+            if result != 0:
+                self.setStyleSheet(self.stylesheet)
+                QtGui.QMessageBox.warning(self, "Error", "Error while extracting images from file!")
+            shotName = filename.split('/')[-1].split('.')[0]
+            d = datetime.now()
+            date = '%s/%s/%s' % (d.day, d.month, d.year)
+        else:
             shotName, firstFrame,lastFrame, date = self.getShotInfo(str(inputFolder), str(imageExt))
-            label = 'Quarks %s %s Frame#' % (date, shotName)
-            self.slugTextBox.setText(label)
+        label = 'Quarks %s %s Frame#' % (date, shotName)
+        self.slugTextBox.setText(label)
+
+    def extractJpegToTmp(self, filename, tmpFolder):
+        if not os.path.exists(tmpFolder):
+            os.mkdir(tmpFolder)
+        cmd = 'ffmpeg.exe -i %s -f image2 "%s/temp.1%%3d.jpeg"' % (filename, tmpFolder)
+        args = shlex.split(cmd)
+        result = subprocess.call(args, shell=True)
+        return result
 
     def showSlugOptions(self, state):
         '''
@@ -274,20 +291,10 @@ class Q_ProresGui(QtGui.QMainWindow):
             outputFile = '%s.mov' % outputFile
 
         if imageExt == 'avi':
-            result = self.generateMovieFromMovie(str(inputFile), outputFile)
-            if result == 0:
-                self.pLabel.setText('Encoding Complete')
-                self.pBar.setValue(100)
-                self.setStyleSheet(self.stylesheet)
-                QtGui.QMessageBox.about(self, "Complete", "Conversion Complete")
-                if self.movBox.checkState() == 2:
-                    self.openOutputMovie(outputFile)
-            else:
-                self.setStyleSheet(self.stylesheet)
-                QtGui.QMessageBox.warning(self, "Error", "Conversion Error!")
-            return
+            inputFolder = '%s/imageSeq' % os.environ['TEMP']
+            imageExt = 'jpeg'
 
-        shotName, firstFrame,lastFrame, date = self.getShotInfo(inputFolder, imageExt)
+        shotName, firstFrame, lastFrame, date = self.getShotInfo(inputFolder, imageExt)
         # Check if frame numbers are valid
         if firstFrame == 0 or lastFrame == 0:
             self.setStyleSheet(self.stylesheet)
@@ -331,6 +338,8 @@ class Q_ProresGui(QtGui.QMainWindow):
             else:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Conversion Error!")
+        if not os.path.exists('%s/imageSeq' % os.environ['TEMP']):
+            shutil.rmtree('%s/imageSeq' % os.environ['TEMP'])
 
     def openOutputMovie(self, outputFile):
         '''
@@ -349,7 +358,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             import time
             # This is a hack. We wait 3 sec for the movie to load completely before sending the next signal.
             # Otherwise the signal is not registered.
-            time.sleep(3)
+            time.sleep(1)
             autoit.control_send(title, '', '{CTRLDOWN}0{CTRLUP}')
 
     def getVideoPlayer(self):
@@ -369,15 +378,6 @@ class Q_ProresGui(QtGui.QMainWindow):
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Video Player Error", "QuickTime or VLC not installed.")
         return videoPlayerDir
-
-    def generateMovieFromMovie(self, inputFile, outputFile):
-
-        finalMovCmd = 'ffmpeg.exe -y -an -i "%s" ' \
-                      '-metadata comment="Source Movie:%s" -vcodec prores ' \
-                      '-profile:v 2 "%s" ' % (inputFile, inputFile, outputFile)
-        args = shlex.split(finalMovCmd)
-        result = subprocess.call(args, shell=True)
-        return result
 
     def generateSlugImages(self, tmpDir, shotName, firstFrame, lastFrame, date):
         '''
