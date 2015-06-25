@@ -127,7 +127,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         '''
         inputFolder = os.path.dirname(str(filename))
         imageExt = str(filename).split('.')[-1]
-        if imageExt == 'avi':
+        if imageExt.lower() == 'avi' or imageExt.lower() == 'mov':
             inputFolder = '%s/imageSeq' % os.environ['TEMP']
             result = self.extractJpegToTmp(filename, inputFolder)
             if result != 0:
@@ -289,7 +289,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         if not outputFile.endswith('.mov'):
             outputFile = '%s.mov' % outputFile
 
-        if imageExt == 'avi':
+        if imageExt.lower() == 'avi' or imageExt.lower() == 'mov':
             inputFolder = '%s/imageSeq' % os.environ['TEMP']
             imageExt = 'jpeg'
 
