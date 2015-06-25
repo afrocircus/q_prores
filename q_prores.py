@@ -35,7 +35,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.3')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.4')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(320,200)
@@ -137,7 +137,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             d = datetime.now()
             date = '%s/%s/%s' % (d.day, d.month, d.year)
         else:
-            shotName, firstFrame,lastFrame, date = self.getShotInfo(str(inputFolder), str(imageExt))
+            shotName, firstFrame,lastFrame, date, firstFrameStr = self.getShotInfo(str(inputFolder), str(imageExt))
         label = 'Quarks %s %s Frame#' % (date, shotName)
         self.slugTextBox.setText(label)
 
@@ -217,19 +217,16 @@ class Q_ProresGui(QtGui.QMainWindow):
             else:
                 inputFolder = '%s/%s' % (inFolder, dir)
             imageExt = self.batchWidget.getImageExt(inputFolder)
-            shotName, firstFrame,lastFrame, date = self.getShotInfo(inputFolder, imageExt)
-            if firstFrame == 0 or firstFrame == 1:
-                self.resultDict[shotName, imageExt] = 1
-                continue
-            else:
-                self.resultDict[shotName, imageExt] = 0
+            shotName, firstFrame,lastFrame, date, firstFrameStr = self.getShotInfo(inputFolder, imageExt)
             outputFile = '%s/%s.mov' % (outputFolder, shotName)
             self.pLabel.setText('Making movie %s.mov' % shotName )
             QtGui.QApplication.processEvents()
             if slugChoice == 2:
-                self.batchSlugMovie(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame, date)
+                self.batchSlugMovie(inputFolder, outputFile, firstFrame,
+                                    shotName, imageExt, lastFrame, date, firstFrameStr)
             else:
-                self.batchNoSlugMovie(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame)
+                self.batchNoSlugMovie(inputFolder, outputFile, firstFrame,
+                                      shotName, imageExt, lastFrame, firstFrameStr)
             percentage = count * 100 / total
             self.pBar.setValue(percentage)
             QtGui.QApplication.processEvents()
@@ -254,24 +251,26 @@ class Q_ProresGui(QtGui.QMainWindow):
                 listStr = '%s %s \n' % (listStr, file)
             QtGui.QMessageBox.warning(self, "Error", "Conversion complete for all shots except: %s" % listStr)
 
-    def batchSlugMovie(self, inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame, date):
+    def batchSlugMovie(self, inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame, date, firstFrameStr):
         tmpDir = '%s\\tmp_%s' % (os.environ['TEMP'], shotName)
         if not os.path.exists(tmpDir):
             os.mkdir(tmpDir)
-        slugResult = self.generateSlugImages(tmpDir, shotName, firstFrame,lastFrame, date)
+        slugResult = self.generateSlugImages(tmpDir, shotName, firstFrame,lastFrame, date, firstFrameStr)
         if slugResult == 0:
-            slugMovResult = self.generateSlugMovie(tmpDir, firstFrame)
+            slugMovResult = self.generateSlugMovie(tmpDir, firstFrame, firstFrameStr)
             if slugMovResult == 0:
-                result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame, shotName, imageExt, lastFrame)
+                result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame,
+                                                shotName, imageExt, lastFrame, firstFrameStr)
                 self.resultDict[shotName, imageExt] = result
             else:
                 self.resultDict[shotName, imageExt] = slugMovResult
         else:
             self.resultDict[shotName, imageExt] = slugResult
 
-    def batchNoSlugMovie(self, inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame):
+    def batchNoSlugMovie(self, inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame, firstFrameStr):
         self.pLabel.setText('Making movie %s.mov' % shotName)
-        result = self.generateFileMovieNoSlug(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame)
+        result = self.generateFileMovieNoSlug(inputFolder, outputFile, firstFrame,
+                                              shotName, imageExt, lastFrame, firstFrameStr)
         self.resultDict[shotName, imageExt] = result
 
     def createMovieNoBatch(self):
@@ -294,30 +293,26 @@ class Q_ProresGui(QtGui.QMainWindow):
             inputFolder = '%s/imageSeq' % os.environ['TEMP']
             imageExt = 'jpeg'
 
-        shotName, firstFrame, lastFrame, date = self.getShotInfo(inputFolder, imageExt)
-        # Check if frame numbers are valid
-        if firstFrame == 0 or lastFrame == 0:
-            self.setStyleSheet(self.stylesheet)
-            QtGui.QMessageBox.warning(self, "Error", "Frame numbers are incorrect! Numbers must start with 1. Eg. 1001")
-            return
+        shotName, firstFrame, lastFrame, date, firstFrameStr = self.getShotInfo(inputFolder, imageExt)
 
         if slugChoice == 2:
             self.pLabel.setText('Creating Slug...')
             tmpDir = '%s\\tmp' % os.environ['TEMP']
             if not os.path.exists(tmpDir):
                 os.mkdir(tmpDir)
-            slugResult = self.generateSlugImages(tmpDir, shotName, firstFrame,lastFrame, date)
+            slugResult = self.generateSlugImages(tmpDir, shotName, firstFrame,lastFrame, date, firstFrameStr)
             if slugResult != 0:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug images!")
                 return
-            slugMovResult = self.generateSlugMovie(tmpDir, firstFrame)
+            slugMovResult = self.generateSlugMovie(tmpDir, firstFrame, firstFrameStr)
             if slugMovResult != 0:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error while creating slug movie!")
                 return
             self.pLabel.setText('Encoding movie...')
-            result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame, shotName, imageExt, lastFrame)
+            result = self.generateFileMovie(inputFolder, tmpDir, outputFile, firstFrame,
+                                            shotName, imageExt, lastFrame, firstFrameStr)
             if result != 0:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Error during final movie conversion!")
@@ -327,7 +322,8 @@ class Q_ProresGui(QtGui.QMainWindow):
             shutil.rmtree(tmpDir)
         else:
             self.pLabel.setText('Encoding Movie...')
-            result = self.generateFileMovieNoSlug(inputFolder, outputFile, firstFrame, shotName, imageExt, lastFrame)
+            result = self.generateFileMovieNoSlug(inputFolder, outputFile, firstFrame,
+                                                  shotName, imageExt, lastFrame, firstFrameStr)
             if result == 0:
                 self.pLabel.setText('Encoding Complete')
                 self.pBar.setValue(100)
@@ -379,7 +375,7 @@ class Q_ProresGui(QtGui.QMainWindow):
                 QtGui.QMessageBox.warning(self, "Video Player Error", "QuickTime or VLC not installed.")
         return videoPlayerDir
 
-    def generateSlugImages(self, tmpDir, shotName, firstFrame, lastFrame, date):
+    def generateSlugImages(self, tmpDir, shotName, firstFrame, lastFrame, date, firstFrameStr):
         '''
         Slug Images are generated and stored in tmpDir
         :param tmpDir: Temporary Directory in the Users local temp
@@ -402,8 +398,9 @@ class Q_ProresGui(QtGui.QMainWindow):
         incrValue = 40.0/totalFrames
         count = self.pBar.value()
         for i in range(firstFrame, lastFrame+1):
-            args[-1] = '%s\\slug.%s.jpg' % (tmpDir, i)
-            args[-2] = 'label:%s %s' % (label, str(i).replace('1','0',1))
+            frameStr = firstFrameStr[:-(len(str(i)))] + str(i)
+            args[-1] = '%s\\slug.%s.jpg' % (tmpDir, frameStr)
+            args[-2] = 'label:%s %s' % (label, str(frameStr))
             result.append(subprocess.call(args, shell=True))
             count = count + incrValue
             if self.batchBox.checkState() != 2:
@@ -428,42 +425,54 @@ class Q_ProresGui(QtGui.QMainWindow):
             shotName = files[0].split('.')[0]
             firstFrame = files[0].split('.')[1]
             lastFrame = files[-1].split('.')[1]
-            return shotName, int(firstFrame), int(lastFrame), dateStr
+            return shotName, int(firstFrame), int(lastFrame), dateStr, firstFrame
         else:
             return '',0,0,dateStr
 
-    def generateSlugMovie(self, tmpDir, firstFrame):
+    def generateSlugMovie(self, tmpDir, firstFrame, firstFrameStr):
         '''
         Generates a movie of the slug images. Stores it in the same temp folder
         :param tmpDir: Temp Folder in the users local temp.
         :param firstFrame: first frame
         :return:
         '''
-        slugMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s\\slug.%%0%sd.jpg" ' \
-                     '-vcodec prores -profile:v 2 "%s\\slug.mov"' % (firstFrame, tmpDir, len(str(firstFrame)), tmpDir)
+        if len(str(firstFrame)) == 1:
+            frameLen = len(str(firstFrameStr))
+            slugMovCmd = 'ffmpeg.exe -y -an -i "%s\\slug.%%0%sd.jpg" ' \
+                         '-vcodec prores -profile:v 2 "%s\\slug.mov"' % (tmpDir, frameLen, tmpDir)
+        else:
+            frameLen = len(str(firstFrameStr))-1
+            slugMovCmd = 'ffmpeg.exe -y -an -i "%s\\slug.1%%0%sd.jpg" ' \
+                         '-vcodec prores -profile:v 2 "%s\\slug.mov"' % (tmpDir, frameLen, tmpDir)
         args = shlex.split(slugMovCmd)
         result = subprocess.call(args, shell=True)
         return result
 
-    def generateFileMovie(self, inputFolder, tmpDir, outputFile, firstFrame, fileName, imageExt, lastFrame):
+    def generateFileMovie(self, inputFolder, tmpDir, outputFile, firstFrame, fileName, imageExt, lastFrame, firstFrameStr):
         '''
         Composites the slug movie with the input images to generate the final movie.
         '''
         if imageExt == 'exr':
             # Convert exr to exr using imagemagik to get the exr format correct.
-            self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
+            self.convertExr(inputFolder, fileName, firstFrame, lastFrame, firstFrameStr)
             filePath = '%s\\exrTmp\\%s' % (os.environ['TEMP'], fileName)
         else:
             filePath = '%s\\%s' % (inputFolder, fileName)
         inputFile = '%s.%s.%s' % (fileName, firstFrame, imageExt)
 
-        finalMovCmd = 'ffmpeg.exe -y -start_number %s -an -i "%s.%%0%sd.%s" ' \
-                      '-i "%s\\slug.mov" -metadata comment="Source Image:%s" -filter_complex "overlay=1:1" ' \
-                      '-vcodec prores -profile:v 2 "%s" ' % (firstFrame, filePath, len(str(firstFrame)),
-                                                                     imageExt, tmpDir, inputFile,
-                                                                     outputFile)
+        if len(str(firstFrame)) == 1:
+            frameLen = len(str(firstFrameStr))
+            finalMovCmd = 'ffmpeg.exe -y -an -i "%s.%%0%sd.%s" ' \
+                          '-i "%s\\slug.mov" -metadata comment="Source Image:%s" -filter_complex "overlay=1:1" ' \
+                          '-vcodec prores -profile:v 2 "%s" ' % (filePath, frameLen, imageExt,
+                                                                 tmpDir, inputFile, outputFile)
+        else:
+            frameLen = len(str(firstFrameStr))-1
+            finalMovCmd = 'ffmpeg.exe -y -an -i "%s.1%%0%sd.%s" ' \
+                          '-i "%s\\slug.mov" -metadata comment="Source Image:%s" -filter_complex "overlay=1:1" ' \
+                          '-vcodec prores -profile:v 2 "%s" ' % (filePath, frameLen, imageExt,
+                                                                 tmpDir, inputFile, outputFile)
         args = shlex.split(finalMovCmd)
-        #result = subprocess.call(args, shell=True)
         try:
             p = subprocess.Popen(finalMovCmd, shell=True, bufsize=64, stderr=subprocess.PIPE)
             self.updateProgressBar(p)
@@ -474,24 +483,30 @@ class Q_ProresGui(QtGui.QMainWindow):
             shutil.rmtree('%s/exrTmp' % inputFolder)
         return result
 
-    def generateFileMovieNoSlug(self, inputFolder, outputFile, firstFrame, fileName, imageExt, lastFrame):
+    def generateFileMovieNoSlug(self, inputFolder, outputFile, firstFrame, fileName, imageExt, lastFrame, firstFrameStr):
         '''
         Generate the movie without the slug, only from the input image sequence.
         '''
         if imageExt == 'exr':
             # Convert exr to correct format using imagemagik
-            self.convertExr(inputFolder, fileName, firstFrame, lastFrame)
+            self.convertExr(inputFolder, fileName, firstFrame, lastFrame, firstFrameStr)
             filePath = '%s\\exrTmp\\%s' % (os.environ['TEMP'], fileName)
         else:
             filePath = '%s\\%s' % (inputFolder, fileName)
 
-        finalMovCmd = 'ffmpeg.exe -y -start_number %s  -an -i "%s.%%0%sd.%s" ' \
-                      '-metadata comment="Source Image:%s.%s.%s" -vcodec prores ' \
-                      '-profile:v 2 "%s" ' % (firstFrame, filePath,
-                                              len(str(firstFrame)),
-                                              imageExt, fileName,firstFrame,imageExt, outputFile)
+        if len(str(firstFrame)) == 1:
+            frameLen = len(str(firstFrameStr))
+            finalMovCmd = 'ffmpeg.exe -y -an -i "%s.%%0%sd.%s" ' \
+                          '-metadata comment="Source Image:%s.%s.%s" -vcodec prores ' \
+                          '-profile:v 2 "%s" ' % (filePath, frameLen, imageExt, fileName,
+                                                  firstFrame,imageExt, outputFile)
+        else:
+            frameLen = len(str(firstFrameStr))-1
+            finalMovCmd = 'ffmpeg.exe -y -an -i "%s.1%%0%sd.%s" ' \
+                          '-metadata comment="Source Image:%s.%s.%s" -vcodec prores ' \
+                          '-profile:v 2 "%s" ' % (filePath, frameLen, imageExt, fileName,
+                                                  firstFrame,imageExt, outputFile)
         args = shlex.split(finalMovCmd)
-        #result = subprocess.call(args, shell=True)
         try:
             p = subprocess.Popen(finalMovCmd, shell=True, bufsize=64, stderr=subprocess.PIPE)
             self.updateProgressBar(p)
@@ -502,7 +517,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             shutil.rmtree('%s/exrTmp' % inputFolder)
         return result
 
-    def convertExr(self, inputFolder, fileName, firstFrame, lastFrame):
+    def convertExr(self, inputFolder, fileName, firstFrame, lastFrame, firstFrameStr):
         '''
         Generate new exr from input exr images using ImageMagik.
         This was required as the compression type of the input exr images was not supported.
@@ -515,8 +530,9 @@ class Q_ProresGui(QtGui.QMainWindow):
         incrValue = 50.0/totalFrames
         count = self.pBar.value()
         for i in range(firstFrame, lastFrame+1):
-            args[1] = '%s/%s.%s.exr' % (inputFolder, fileName, i)
-            args[2] = '%s/exrTmp/%s.%s.exr' % (os.environ['TEMP'], fileName, i)
+            frameStr = firstFrameStr[:-(len(str(i)))] + str(i)
+            args[1] = '%s/%s.%s.exr' % (inputFolder, fileName, frameStr)
+            args[2] = '%s/exrTmp/%s.%s.exr' % (os.environ['TEMP'], fileName, frameStr)
             subprocess.call(args, shell=True)
             count = count + incrValue
             if self.batchBox.checkState() != 2:
@@ -538,7 +554,6 @@ class Q_ProresGui(QtGui.QMainWindow):
                 progress = secs/duration * outOf
                 QtGui.QApplication.processEvents()
                 self.pBar.setValue(int(progress+curValue))
-                print int(progress+curValue)
             if not chatter:
                 break
 
