@@ -35,7 +35,7 @@ class Q_ProresGui(QtGui.QMainWindow):
         Basic UI setup.
         '''
         super(Q_ProresGui, self).__init__()
-        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.4')
+        self.setWindowTitle('Loco VFX - QX Tools 2015 v2.5')
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(320,200)
@@ -99,7 +99,8 @@ class Q_ProresGui(QtGui.QMainWindow):
         hslugLayout = QtGui.QGridLayout()
         self.slugFrameBox.setLayout(hslugLayout)
         hslugLayout.addWidget(QtGui.QLabel('Slug Label'),0,0)
-        self.slugTextBox = QtGui.QLineEdit('Customize Slug Label')
+        self.globalLabelName = 'Customize Slug Label'
+        self.slugTextBox = QtGui.QLineEdit(self.globalLabelName)
         hslugLayout.addWidget(self.slugTextBox,0,1)
         self.slugFrameBox.setVisible(False)
 
@@ -140,6 +141,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             shotName, firstFrame,lastFrame, date, firstFrameStr = self.getShotInfo(str(inputFolder), str(imageExt))
         label = 'Quarks %s %s Frame#' % (date, shotName)
         self.slugTextBox.setText(label)
+        self.globalLabelName = label
 
     def extractJpegToTmp(self, filename, tmpFolder):
         if not os.path.exists(tmpFolder):
@@ -158,9 +160,14 @@ class Q_ProresGui(QtGui.QMainWindow):
         if state == 2:
             self.slugFrameBox.setVisible(True)
             self.resize(self.sizeHint())
+            if self.batchBox.checkState() == 2:
+                d = datetime.now()
+                date = '%s/%s/%s' % (d.day, d.month, d.year)
+                self.slugTextBox.setText('Quarks %s ShotName Frame#' % date)
         else:
             self.slugFrameBox.setVisible(False)
             self.resize(self.sizeHint())
+            self.slugTextBox.setText(self.globalLabelName)
 
     def showBatchOptions(self, state):
         '''
@@ -170,9 +177,14 @@ class Q_ProresGui(QtGui.QMainWindow):
         if state == 2:
             self.batchWidget.setVisible(True)
             self.resize(self.sizeHint())
+            if self.slugBox.checkState() == 2:
+                d = datetime.now()
+                date = '%s/%s/%s' % (d.day, d.month, d.year)
+                self.slugTextBox.setText('Quarks %s ShotName Frame#' % date)
         else:
             self.batchWidget.setVisible(False)
             self.resize(self.sizeHint())
+            self.slugTextBox.setText(self.globalLabelName)
 
     def createMovie(self, event):
         '''
@@ -334,7 +346,7 @@ class Q_ProresGui(QtGui.QMainWindow):
             else:
                 self.setStyleSheet(self.stylesheet)
                 QtGui.QMessageBox.warning(self, "Error", "Conversion Error!")
-        if not os.path.exists('%s/imageSeq' % os.environ['TEMP']):
+        if os.path.exists('%s/imageSeq' % os.environ['TEMP']):
             shutil.rmtree('%s/imageSeq' % os.environ['TEMP'])
 
     def openOutputMovie(self, outputFile):
